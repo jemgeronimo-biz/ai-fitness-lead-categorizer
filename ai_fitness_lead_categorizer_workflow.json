@@ -1,0 +1,352 @@
+{
+  "name": "i_fitness_lead_categorizer_workflow",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        80
+      ],
+      "id": "dc8ab055-7474-4868-aa4a-2b4733784287",
+      "name": "Manual Trigger"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "5d24f740-d03a-443d-ad07-d8a53b356841",
+              "name": "leads",
+              "value": "[   {\"name\":\"Alice\",\"message\":\"I want to lose 10 pounds before summer.\"},   {\"name\":\"Ben\",\"message\":\"I’m looking to bulk up and build muscle.\"},   {\"name\":\"Cara\",\"message\":\"Can you make a custom meal plan for me?\"},   {\"name\":\"Dan\",\"message\":\"Just curious about your programs and pricing.\"} ]",
+              "type": "array"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        224,
+        80
+      ],
+      "id": "78f45e9c-90bd-4813-90a9-891739c6c4c4",
+      "name": "Mock Leads"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Take the leads array and return one item per lead\nconst leads = items[0].json.leads || [];\nreturn leads.map(lead => ({ json: lead }));\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        80
+      ],
+      "id": "3830b83c-8033-4229-8f17-75628eb37c31",
+      "name": "Explode Leads"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"mistralai/mistral-7b-instruct\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"You are an assistant that classifies fitness leads.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"Categorize the following fitness inquiry into one of the categories:\\n- Weight Loss\\n- Muscle Gain\\n- Nutrition Plan\\n- General Fitness Inquiry\\n\\nInquiry: {{ $json.message }}\\n\\nRespond with only the category name.\"\n    }\n  ]\n}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        672,
+        0
+      ],
+      "id": "d6f7dabd-7d9e-4302-ae46-03767fda703d",
+      "name": "AI Categorizer (OpenRouter)",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "BLufK8t57dgIS3ZL",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "return items.map((item, index) => {\n  // Each AI result item corresponds to the same lead in the same order\n  const category = item.json.choices?.[0]?.message?.content?.trim() || \"Uncategorized\";\n\n  // Clean up category string\n  const cleanCategory = category.replace(/^[\"'\\s]+|[\"'\\s]+$/g, \"\");\n\n  return {\n    json: {\n      ...item.json,\n      category: cleanCategory\n    }\n  };\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        0
+      ],
+      "id": "a1898f3f-de17-4af7-a1ac-09721a7fafb6",
+      "name": "Parse Category"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1104,
+        352
+      ],
+      "id": "7bac7837-d78e-4d27-85a1-754386a5f937",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "jsCode": "return items.map(({ json }) => {\n  const clean = {\n    name: json.name,\n    message: json.message,\n    category: json.category?.trim() || \"Uncategorized\",\n    timestamp: new Date().toISOString(),\n  };\n\n  // Simple coach assignment logic\n  if (/weight/i.test(clean.category)) clean.coach = \"Coach A\";\n  else if (/muscle/i.test(clean.category)) clean.coach = \"Coach B\";\n  else if (/nutrition/i.test(clean.category)) clean.coach = \"Coach C\";\n  else clean.coach = \"Coach General\";\n\n  return { json: clean };\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1328,
+        352
+      ],
+      "id": "06465a5b-0375-4273-b57c-9318309f6796",
+      "name": "Assign Coach & Clean"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1Psu6rS806mNn8nRnJHt7RyaEp7UEKLbRtUg1xTHguRA",
+          "mode": "list",
+          "cachedResultName": "AI Fitness Leads",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Psu6rS806mNn8nRnJHt7RyaEp7UEKLbRtUg1xTHguRA/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1Psu6rS806mNn8nRnJHt7RyaEp7UEKLbRtUg1xTHguRA/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Name": "={{ $json.name }}",
+            "Message": "={{ $json.message }}",
+            "Category": "={{ $json.category }}",
+            "Coach": "={{ $json.coach }}",
+            "Timestamp": "={{ $json.timestamp }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Name",
+              "displayName": "Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Message",
+              "displayName": "Message",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Category",
+              "displayName": "Category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Coach",
+              "displayName": "Coach",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Timestamp",
+              "displayName": "Timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1536,
+        352
+      ],
+      "id": "30a539ce-19f4-4685-90ef-b07def141ba3",
+      "name": "Append to CRM Sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "ITE1EnH1bErxn13C",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "jemgeronimo.biz@gmail.com",
+        "subject": "=New Fitness Lead — {{ $json.Category }}",
+        "message": "=<h2>💪 New Fitness Lead</h2> <p><b>Name:</b> {{$json.Name}}</p> <p><b>Category:</b> {{$json.Category}}</p> <p><b>Coach:</b> {{$json.Coach}}</p> <p><b>Message:</b><br> {{$json.Message}}</p> <hr> <p style=\"font-size:12px;color:#888;\"> Added at: {{$json.Timestamp}}<br> AI Fitness Lead Categorizer by Jem </p>",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1744,
+        352
+      ],
+      "id": "9e95884f-c056-4ccd-85b4-722b10570b1c",
+      "name": "Send a message",
+      "webhookId": "f8138dc2-c9cb-4bff-860f-55ab9940e90f",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "kdOgzMKWsxWAjBm6",
+          "name": "Gmail account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Mock Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mock Leads": {
+      "main": [
+        [
+          {
+            "node": "Explode Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Explode Leads": {
+      "main": [
+        [
+          {
+            "node": "AI Categorizer (OpenRouter)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "AI Categorizer (OpenRouter)": {
+      "main": [
+        [
+          {
+            "node": "Parse Category",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Category": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Assign Coach & Clean",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assign Coach & Clean": {
+      "main": [
+        [
+          {
+            "node": "Append to CRM Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append to CRM Sheet": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "0bd37fab-18a2-4ad2-929a-8fcad9aae6f0",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "56403985861bef8cf1d38cd2d3551a759587f7b54bc1568b9a78c7e04fd1be5a"
+  },
+  "id": "0lsKPHUVvqeBCoXV",
+  "tags": []
+}
